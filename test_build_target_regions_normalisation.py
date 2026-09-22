@@ -1,5 +1,6 @@
 import csv
 import hashlib
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -156,6 +157,73 @@ class TestVerifyOutput(unittest.TestCase):
             build_mod.verify_output(self.path, skip=True)  # must not raise
         finally:
             build_mod.EXPECTED_OUTPUT_MD5 = orig_md5
+
+
+class TestRunNormalisationFileBuilderCommandConstruction(unittest.TestCase):
+    """Verifies the actual argv list passed to sh() -- no real java/dx call."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.workdir = Path(self.tmp.name)
+        self.captured = []
+        self.orig_sh = build_mod.sh
+
+        def fake_sh(cmd, **kw):
+            self.captured.append((cmd, kw))
+
+        build_mod.sh = fake_sh
+
+    def tearDown(self):
+        build_mod.sh = self.orig_sh
+        self.tmp.cleanup()
+
+    def test_uses_shell_false_style_argv_list_not_a_string(self):
+        build_mod.run_normalisation_file_builder(
+            self.workdir / "cobalt.jar", self.workdir / "bed.bed", self.workdir / "gc.cnp",
+            "38", self.workdir / "cobalt_dir", self.workdir / "amber_dir",
+            self.workdir / "sample_ids.csv", self.workdir / "out.tsv", self.workdir,
+        )
+        cmd, kw = self.captured[0]
+        self.assertIsInstance(cmd, list)
+        self.assertTrue(all(isinstance(c, str) for c in cmd))
+        self.assertEqual(kw.get("cwd"), self.workdir)
+
+    def test_output_file_arg_is_the_resolved_absolute_path_even_with_a_subdirectory(self):
+        # Regression test: -output_file must not be reduced to a bare
+        # filename, or an --out with a subdirectory silently writes to the
+        # wrong place (verify_output would then look in the subdirectory
+        # and raise FileNotFoundError).
+        nested_out = self.workdir / "results" / "out.tsv"
+        build_mod.run_normalisation_file_builder(
+            self.workdir / "cobalt.jar", self.workdir / "bed.bed", self.workdir / "gc.cnp",
+            "38", self.workdir / "cobalt_dir", self.workdir / "amber_dir",
+            self.workdir / "sample_ids.csv", nested_out, self.workdir,
+        )
+        cmd, _ = self.captured[0]
+        idx = cmd.index("-output_file")
+        self.assertEqual(cmd[idx + 1], str(nested_out.resolve()))
+
+    def test_other_inputs_are_passed_as_bare_names_relative_to_cwd(self):
+        build_mod.run_normalisation_file_builder(
+            self.workdir / "cobalt.jar", self.workdir / "bed.bed", self.workdir / "gc.cnp",
+            "38", self.workdir / "cobalt_dir", self.workdir / "amber_dir",
+            self.workdir / "sample_ids.csv", self.workdir / "out.tsv", self.workdir,
+        )
+        cmd, _ = self.captured[0]
+        self.assertIn("cobalt.jar", cmd)
+        self.assertIn("bed.bed", cmd)
+        self.assertIn("cobalt_dir/", cmd)
+
+
+class TestMainWorkdirHandling(unittest.TestCase):
+    def test_skip_download_without_explicit_workdir_exits(self):
+        orig_argv = sys.argv
+        sys.argv = ["prog", "--skip-download"]
+        try:
+            with self.assertRaises(SystemExit):
+                build_mod.main()
+        finally:
+            sys.argv = orig_argv
 
 
 if __name__ == "__main__":

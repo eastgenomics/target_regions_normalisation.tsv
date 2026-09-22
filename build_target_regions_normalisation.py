@@ -47,6 +47,7 @@ import csv
 import hashlib
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 DEFAULT_COBALT_JAR_SOURCE = "project-Fkb6Gkj433GVVvj73J7x8KbV:file-J893p9Q470j4zY3zzpVBjP11"
@@ -133,12 +134,12 @@ EXPECTED_OUTPUT_LINES = 74503
 
 
 def sh(cmd, **kw):
-    print(f"+ {cmd}", file=sys.stderr)
-    return subprocess.run(cmd, shell=True, check=True, **kw)
+    print(f"+ {' '.join(str(c) for c in cmd)}", file=sys.stderr)
+    return subprocess.run(cmd, shell=False, check=True, **kw)
 
 
 def dx_download(project_file_id, out_path):
-    sh(f"dx download {project_file_id} -o {out_path} -f")
+    sh(["dx", "download", str(project_file_id), "-o", str(out_path), "-f"])
 
 
 def chr_prefix_bed(src_path, dest_path):
@@ -189,15 +190,23 @@ def run_normalisation_file_builder(
     cobalt_jar, backbone_bed_chr, gc_profile, ref_genome_version,
     cobalt_dir, amber_dir, sample_ids_csv, out_path, workdir,
 ):
+    # -output_file is the one argument that may legitimately point outside
+    # workdir (a caller-supplied --out with a subdirectory) -- resolve it to
+    # an absolute path rather than reducing it to a bare filename, or the
+    # builder would silently write to the wrong place (see the test that
+    # covers this: test_out_path_with_subdirectory_is_preserved).
     sh(
-        f"java -cp {Path(cobalt_jar).name} com.hartwig.hmftools.cobalt.norm.NormalisationFileBuilder "
-        f"-cobalt_dir {Path(cobalt_dir).name}/ "
-        f"-target_regions_bed {Path(backbone_bed_chr).name} "
-        f"-gc_profile {Path(gc_profile).name} "
-        f"-ref_genome_version {ref_genome_version} "
-        f"-sample_id_file {Path(sample_ids_csv).name} "
-        f"-amber_dir {Path(amber_dir).name}/ "
-        f"-output_file {Path(out_path).name}",
+        [
+            "java", "-cp", Path(cobalt_jar).name,
+            "com.hartwig.hmftools.cobalt.norm.NormalisationFileBuilder",
+            "-cobalt_dir", f"{Path(cobalt_dir).name}/",
+            "-target_regions_bed", Path(backbone_bed_chr).name,
+            "-gc_profile", Path(gc_profile).name,
+            "-ref_genome_version", str(ref_genome_version),
+            "-sample_id_file", Path(sample_ids_csv).name,
+            "-amber_dir", f"{Path(amber_dir).name}/",
+            "-output_file", str(Path(out_path).resolve()),
+        ],
         cwd=workdir,
     )
 
@@ -237,14 +246,25 @@ def main():
         default=str(Path(__file__).parent / "training_cohort_manifest.tsv"),
         help="Frozen 41-sample EF v1 cohort manifest, see Decision 5",
     )
-    ap.add_argument("--workdir", default="/tmp/build_target_regions_normalisation")
+    ap.add_argument("--workdir", default=None,
+                     help="Defaults to a fresh, private temp dir (tempfile.mkdtemp) -- "
+                     "pass an explicit path to reuse one, e.g. with --skip-download")
     ap.add_argument("--out", default="target_regions_normalisation.tsv")
     ap.add_argument("--skip-download", action="store_true", help="Reuse existing files in --workdir")
     ap.add_argument("--skip-checksum-assert", action="store_true")
     args = ap.parse_args()
 
-    workdir = Path(args.workdir)
-    workdir.mkdir(parents=True, exist_ok=True)
+    if args.workdir:
+        workdir = Path(args.workdir)
+        workdir.mkdir(parents=True, exist_ok=True)
+    else:
+        if args.skip_download:
+            sys.exit("--skip-download requires an explicit --workdir (nothing to reuse otherwise)")
+        # A fixed, world-writable /tmp path is an insecure default -- another
+        # local user could pre-create it or race to replace cobalt.jar
+        # between download and the java invocation. A fresh private tempdir
+        # closes that off; pass --workdir explicitly to reuse a location.
+        workdir = Path(tempfile.mkdtemp(prefix="build_target_regions_normalisation-"))
 
     manifest = load_cohort_manifest(args.cohort_manifest)
 
@@ -255,7 +275,8 @@ def main():
     cobalt_dir = workdir / "cobalt_bootstrap_all"
     amber_dir = workdir / "amber_flat"
     sample_ids_csv = workdir / "sample_ids.csv"
-    out_path = workdir / args.out
+    out_path = (workdir / args.out).resolve()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not args.skip_download:
         dx_download(args.cobalt_jar_source, cobalt_jar)
