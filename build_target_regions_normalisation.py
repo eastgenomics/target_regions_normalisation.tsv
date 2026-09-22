@@ -254,7 +254,9 @@ def main():
     ap.add_argument("--skip-checksum-assert", action="store_true")
     args = ap.parse_args()
 
-    if args.workdir:
+    if args.workdir is not None:
+        if args.workdir == "":
+            sys.exit("--workdir must not be empty")
         workdir = Path(args.workdir)
         workdir.mkdir(parents=True, exist_ok=True)
     else:
@@ -265,6 +267,7 @@ def main():
         # between download and the java invocation. A fresh private tempdir
         # closes that off; pass --workdir explicitly to reuse a location.
         workdir = Path(tempfile.mkdtemp(prefix="build_target_regions_normalisation-"))
+        print(f"Using generated workdir: {workdir}", file=sys.stderr)
 
     manifest = load_cohort_manifest(args.cohort_manifest)
 

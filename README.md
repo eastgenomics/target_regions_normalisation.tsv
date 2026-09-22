@@ -68,9 +68,11 @@ Requires: `dx` (authenticated DNAnexus CLI), `java` (a JRE — no Docker
 needed, `NormalisationFileBuilder` is a plain JAR invocation), Python 3
 stdlib only otherwise.
 
-Run in a fresh/empty `--workdir` (the default,
-`/tmp/build_target_regions_normalisation`, is fine as long as nothing from a
-previous run is left in it), without `--skip-download`. This is the exact
+Run without `--workdir` for a fresh build — the script creates a private,
+freshly-generated temp directory (`tempfile.mkdtemp()`) and prints its path
+on completion, so there's never a stale-artifact risk between runs. Pass an
+explicit `--workdir` to reuse a location (required for `--skip-download`,
+since there's nothing to reuse otherwise). Either way, this is the exact
 same command whether you're recreating the file for the first time or
 independently verifying reproducibility — there is no separate test mode.
 A real, fresh run downloads the jar, BED, GC profile, and all 82

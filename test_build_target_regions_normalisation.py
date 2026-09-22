@@ -225,6 +225,24 @@ class TestMainWorkdirHandling(unittest.TestCase):
         finally:
             sys.argv = orig_argv
 
+    def test_empty_workdir_string_is_rejected_not_treated_as_omitted(self):
+        orig_argv = sys.argv
+        sys.argv = ["prog", "--workdir", ""]
+        try:
+            with self.assertRaises(SystemExit):
+                build_mod.main()
+        finally:
+            sys.argv = orig_argv
+
+    def test_empty_workdir_string_with_skip_download_is_rejected(self):
+        orig_argv = sys.argv
+        sys.argv = ["prog", "--skip-download", "--workdir", ""]
+        try:
+            with self.assertRaises(SystemExit):
+                build_mod.main()
+        finally:
+            sys.argv = orig_argv
+
 
 if __name__ == "__main__":
     unittest.main()
