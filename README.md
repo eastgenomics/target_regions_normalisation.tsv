@@ -70,7 +70,7 @@ stdlib only otherwise.
 
 Run without `--workdir` for a fresh build — the script creates a private,
 freshly-generated temp directory (`tempfile.mkdtemp()`) and prints its path
-on completion, so there's never a stale-artifact risk between runs. Pass an
+when it's created, so there's never a stale-artifact risk between runs. Pass an
 explicit `--workdir` to reuse a location (required for `--skip-download`,
 since there's nothing to reuse otherwise). Either way, this is the exact
 same command whether you're recreating the file for the first time or

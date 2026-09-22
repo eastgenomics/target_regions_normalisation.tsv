@@ -229,8 +229,9 @@ class TestMainWorkdirHandling(unittest.TestCase):
         orig_argv = sys.argv
         sys.argv = ["prog", "--workdir", ""]
         try:
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(SystemExit) as ctx:
                 build_mod.main()
+            self.assertEqual(ctx.exception.code, "--workdir must not be empty")
         finally:
             sys.argv = orig_argv
 
@@ -238,8 +239,9 @@ class TestMainWorkdirHandling(unittest.TestCase):
         orig_argv = sys.argv
         sys.argv = ["prog", "--skip-download", "--workdir", ""]
         try:
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(SystemExit) as ctx:
                 build_mod.main()
+            self.assertEqual(ctx.exception.code, "--workdir must not be empty")
         finally:
             sys.argv = orig_argv
 
