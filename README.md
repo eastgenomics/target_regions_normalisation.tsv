@@ -23,14 +23,12 @@ script controls.
 The script:
 
 1. Downloads `cobalt.jar` (the approved production release, COBALT
-   3.0-beta.5), the backbone target-regions BED, and the GC profile from
-   DNAnexus, plus the 41-sample training cohort's COBALT ratio and AMBER BAF
-   files (file IDs frozen in `training_cohort_manifest.tsv`).
-2. chr-prefixes the backbone BED (it's sourced as no-chr) — see *Why
-   chr-prefix?* below.
-3. Builds a `SampleId`-only sample list — no Gender column, so gender is
+   3.0-beta.5), the chr-prefixed backbone target-regions BED, and the GC
+   profile from DNAnexus, plus the 41-sample training cohort's COBALT ratio
+   and AMBER BAF files (file IDs frozen in `training_cohort_manifest.tsv`).
+2. Builds a `SampleId`-only sample list — no Gender column, so gender is
    inferred by `NormalisationFileBuilder` itself from real AMBER BAF data.
-4. Runs `NormalisationFileBuilder` and asserts the result against a pinned
+3. Runs `NormalisationFileBuilder` and asserts the result against a pinned
    checksum.
 
 Full narrative (why each decision was made, what was tried, the historical
@@ -75,11 +73,15 @@ Two independent reasons:
   BED's own chr convention must match whatever `-ref_genome_version`'s own
   convention produces.
 
-### Decision 3 — chr-prefix the backbone BED ourselves
+### Decision 3 — use a permanently-stored chr-prefixed BED
 
-The backbone BED is chr-prefixed here (from the live no-chr source,
-`backbone_padded_150bp_nochr.bed`) rather than reusing a separate no-chr GC
-profile, as the historical build did. Two reasons:
+`backbone_padded_150bp.bed` is padded directly from the original
+chr-prefixed raw source (`targets_covered_CNV_WG_s50kb_TE-96770770_hg38_annot.bed`,
+the same vendor/design-provided SNP-position list `backbone_padded_150bp_nochr.bed`
+was itself padded from) via `bedtools slop -b 150`, so it's chr-prefixed
+from the start — no in-script chr-prefixing step, and no need to reuse a
+separate no-chr GC profile, as the historical build did. Two reasons this
+matters:
 
 - `GcProfileCache.findGcProfile()` does a raw, unnormalised string-map
   lookup keyed by whatever the GC profile file literally says -- it is
@@ -92,9 +94,17 @@ profile, as the historical build did. Two reasons:
   (`GC_profile.1000bp.38.nochr.cnp`) was independently confirmed
   byte-identical to the live chr-prefixed copy except for the literal
   "chr" prefix on every line (md5 match after re-stripping, zero diff
-  lines) -- so there was never a need for two separate copies. Simplest
-  correct fix: chr-prefix the BED, keep the one GC profile already in
-  `resource_ids.env`.
+  lines) -- so there was never a need for two separate copies.
+
+This chr-prefixed BED is also used directly by PURPLE's own
+`target_regions_bed` input elsewhere in the pipeline (unrelated to this
+script, but the same underlying resource). PURPLE's own BED parsing was
+traced to `hmf-common`'s `BedLine.chromosome()`
+(`HumanChromosome.fromString()`, chr-prefix agnostic) and confirmed via a
+real A/B PURPLE run on a production sample that swapping between the
+no-chr and chr-prefixed forms of this BED produces byte-identical output
+across every downstream file (purity, CNV somatic/gene, target-region CN,
+QC) — so this change didn't require re-wiring PURPLE.
 
 ### Decision 4 — no Gender column in the sample manifest
 
@@ -156,7 +166,7 @@ pip install pytest dxpy
 pytest test_build_target_regions_normalisation.py -v
 ```
 
-Unit tests cover all pure logic (chr-prefixing, manifest loading, sample-list
+Unit tests cover all pure logic (manifest loading, sample-list
 construction, checksum verification) with synthetic fixtures — no DNAnexus
 or Java access needed. The actual `NormalisationFileBuilder` invocation is
 exercised by the reproducibility runs instead, not mocked here.
