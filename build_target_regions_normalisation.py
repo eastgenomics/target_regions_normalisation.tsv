@@ -38,7 +38,8 @@ Inputs (DNAnexus file IDs, immutable/content-addressed):
 Output:
   target_regions_normalisation.tsv
 
-Requires: dx (DNAnexus CLI, authenticated), java (JRE, no Docker needed —
+Requires: dxpy (DNAnexus Python API, authenticated via the same
+credentials as the dx CLI), java (JRE, no Docker needed —
 NormalisationFileBuilder is a plain JAR invocation), python3 stdlib only
 otherwise.
 """

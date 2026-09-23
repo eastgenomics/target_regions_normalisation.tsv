@@ -152,7 +152,7 @@ way across multiple independent from-scratch runs during development
 ## Tests
 
 ```bash
-pip install pytest
+pip install pytest dxpy
 pytest test_build_target_regions_normalisation.py -v
 ```
 
