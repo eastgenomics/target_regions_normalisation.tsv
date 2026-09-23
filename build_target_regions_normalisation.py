@@ -146,7 +146,7 @@ def run_normalisation_file_builder(
     # workdir (a caller-supplied --out with a subdirectory) -- resolve it to
     # an absolute path rather than reducing it to a bare filename, or the
     # builder would silently write to the wrong place (see the test that
-    # covers this: test_out_path_with_subdirectory_is_preserved).
+    # covers this: test_output_file_arg_is_the_resolved_absolute_path_even_with_a_subdirectory).
     sh(
         [
             "java", "-cp", Path(cobalt_jar).name,
