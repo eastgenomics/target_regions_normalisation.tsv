@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import build_target_regions_normalisation as build_mod
 
@@ -125,38 +126,25 @@ class TestVerifyOutput(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_passes_when_lines_and_md5_match(self):
-        orig_md5, orig_lines = build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES
-        build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES = self.real_md5, self.real_lines
-        try:
+        with mock.patch.object(build_mod, "EXPECTED_OUTPUT_MD5", self.real_md5), \
+             mock.patch.object(build_mod, "EXPECTED_OUTPUT_LINES", self.real_lines):
             build_mod.verify_output(self.path)  # must not raise
-        finally:
-            build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES = orig_md5, orig_lines
 
     def test_exits_when_md5_does_not_match(self):
-        orig_md5, orig_lines = build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES
-        build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES = "0" * 32, self.real_lines
-        try:
+        with mock.patch.object(build_mod, "EXPECTED_OUTPUT_MD5", "0" * 32), \
+             mock.patch.object(build_mod, "EXPECTED_OUTPUT_LINES", self.real_lines):
             with self.assertRaises(SystemExit):
                 build_mod.verify_output(self.path)
-        finally:
-            build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES = orig_md5, orig_lines
 
     def test_exits_when_line_count_does_not_match(self):
-        orig_md5, orig_lines = build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES
-        build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES = self.real_md5, 999999
-        try:
+        with mock.patch.object(build_mod, "EXPECTED_OUTPUT_MD5", self.real_md5), \
+             mock.patch.object(build_mod, "EXPECTED_OUTPUT_LINES", 999999):
             with self.assertRaises(SystemExit):
                 build_mod.verify_output(self.path)
-        finally:
-            build_mod.EXPECTED_OUTPUT_MD5, build_mod.EXPECTED_OUTPUT_LINES = orig_md5, orig_lines
 
     def test_skip_flag_bypasses_a_mismatch_without_raising(self):
-        orig_md5 = build_mod.EXPECTED_OUTPUT_MD5
-        build_mod.EXPECTED_OUTPUT_MD5 = "0" * 32
-        try:
+        with mock.patch.object(build_mod, "EXPECTED_OUTPUT_MD5", "0" * 32):
             build_mod.verify_output(self.path, skip=True)  # must not raise
-        finally:
-            build_mod.EXPECTED_OUTPUT_MD5 = orig_md5
 
 
 class TestRunNormalisationFileBuilderCommandConstruction(unittest.TestCase):

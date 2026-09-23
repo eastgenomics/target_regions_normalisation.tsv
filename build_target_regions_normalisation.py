@@ -50,6 +50,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import dxpy
+
 DEFAULT_COBALT_JAR_SOURCE = "project-Fkb6Gkj433GVVvj73J7x8KbV:file-J893p9Q470j4zY3zzpVBjP11"
 DEFAULT_BACKBONE_BED_SOURCE = "project-Fkb6Gkj433GVVvj73J7x8KbV:file-J88gVF84Y8X123K6JX8jB8Z5"
 DEFAULT_GC_PROFILE_SOURCE = "file-J88xxvQ4QyVPb8K6VFqX1FKB"
@@ -65,72 +67,29 @@ EXPECTED_OUTPUT_LINES = 74503
 
 # ---------------------------------------------------------------------------
 # DECISIONS — every manual, judgement-based resolution from the investigation
-# that produced this script, baked in as explicit data/comments rather than
-# left as one-off interactive commands. Each entry records WHY and the
-# evidence, so a reviewer doesn't have to re-run the original investigation.
+# that produced this script, baked in as explicit data rather than left as
+# one-off interactive commands. Full rationale and evidence for each is in
+# README.md's "Decisions" section, not repeated here.
 # ---------------------------------------------------------------------------
 
-# Decision 1 — Use COBALT 3.0-beta.5 (file-J893p9Q470j4zY3zzpVBjP11), not the
-# older jar (file-J88y0Jj4VP405z36Jq1zyQQj, hmf-common-cobalt-2.2) that the
-# historical build actually used. 3.0-beta.5 is the APPROVED, documented
-# production jar for this whole pipeline (Confluence DV space, page
-# 4807622662, APPROVED 2026-09-14, DI-3865) — verified byte-for-byte against
-# the official GitHub release asset. Using a different, unapproved jar
-# version to build a resource this pipeline depends on would itself be a
-# provenance problem, independent of anything else in this file.
+# Decision 1 — Use the approved COBALT 3.0-beta.5 jar
+# (file-J893p9Q470j4zY3zzpVBjP11), not the older, unapproved jar the
+# historical build actually used (Confluence DV 4807622662, DI-3865).
 
-# Decision 2 — Use -ref_genome_version 38, never 37. Two independent reasons:
-#   (a) The approved jar's own documented behaviour (same Confluence page,
-#       4807622662): "-ref_genome_version 38 is required -- 37 causes an
-#       IndexOutOfBoundsException in this build." The historical build could
-#       only use -ref_genome_version 37 because it used a *different*,
-#       unapproved jar that happened to tolerate it.
-#   (b) Even where 37 doesn't crash, it's a formatting trick, not a genome
-#       assembly choice: NormalisationFileBuilder's FileWriter reconstructs
-#       each expected chromosome key via
-#       RefGenomeVersion.versionedChromosome() -- hmftools' own convention,
-#       V37 -> no-chr, V38 -> chr-prefixed -- and looks that key up against
-#       the BED-derived region map. Passing 38 against a no-chr BED silently
-#       skips every chromosome (zero output rows, no error); passing 37
-#       against a chr-prefixed BED does the same. The BED's own chr
-#       convention must match whatever -ref_genome_version's own convention
-#       produces.
+# Decision 2 — Use -ref_genome_version 38, never 37 -- required by the
+# approved jar, and the BED's chr-prefix convention must match it anyway.
 
-# Decision 3 — chr-prefix the backbone BED ourselves (from the live no-chr
-# source, backbone_padded_150bp_nochr.bed) rather than reuse a separate
-# no-chr GC profile as the historical build did. Two reasons:
-#   (a) GcProfileCache.findGcProfile() does a raw, unnormalised string-map
-#       lookup keyed by whatever the GC profile file literally says -- it is
-#       NOT chr-prefix agnostic (unlike the COBALT-ratio-matching path,
-#       which normalises via HumanChromosome.fromString() and tolerates
-#       either convention). Pairing a no-chr BED with the live chr-prefixed
-#       GC_profile.1000bp.38.cnp throws a NullPointerException in this exact
-#       method -- confirmed by direct reproduction with the real jar.
-#   (b) The no-chr GC profile the historical build used
-#       (GC_profile.1000bp.38.nochr.cnp) was independently confirmed
-#       byte-identical to the live chr-prefixed copy except for the literal
-#       "chr" prefix on every line (md5 match after re-stripping, zero diff
-#       lines) -- so there was never a need for two separate copies. Simplest
-#       correct fix: chr-prefix the BED, keep the one GC profile already in
-#       resource_ids.env.
+# Decision 3 — chr-prefix the backbone BED ourselves rather than reuse a
+# separate no-chr GC profile -- GC-profile matching isn't chr-prefix
+# agnostic, and the no-chr GC profile is byte-identical to the live one.
 
-# Decision 4 — no Gender column in the sample manifest; gender for all 41
-# samples is inferred by NormalisationFileBuilder itself from real AMBER BAF
-# chrX heterozygosity data (com.hartwig.hmftools.common.amber.AmberGender),
-# using whichever pseudo-autosomal-region (PAR) boundary set matches
-# -ref_genome_version. The historical build (V37 PAR boundaries against
-# genuinely GRCh38-aligned AMBER BAF data) was a real, if theoretical,
-# coordinate mismatch -- confirmed via a full 41-sample controlled A/B rerun
-# to have changed ZERO gender calls and ZERO output values for this cohort
-# (holding the jar version constant). V38 is still the correct choice
-# because it's genuinely consistent, not because the V37 mismatch caused
-# visible harm here.
+# Decision 4 — no Gender column in the sample manifest; gender is inferred
+# by NormalisationFileBuilder from real AMBER BAF data. A 41-sample A/B
+# rerun confirmed the V37/V38 PAR-boundary difference changes zero gender
+# calls for this cohort.
 
-# Decision 5 — this cohort manifest (41 EF v1 samples) is frozen, versioned
-# data, not re-derived. It matches the samples used for the currently-live
-# production file, letting a rebuild be checked against that file directly.
-# A different/larger training cohort is a deliberate, separate decision
-# (new panel validation), not something this script infers on its own.
+# Decision 5 — this 41-sample cohort manifest is frozen, versioned data
+# (matches the currently-live production file), not re-derived on the fly.
 
 
 def sh(cmd, **kw):
@@ -139,7 +98,10 @@ def sh(cmd, **kw):
 
 
 def dx_download(project_file_id, out_path):
-    sh(["dx", "download", str(project_file_id), "-o", str(out_path), "-f"])
+    # Accepts either "project-XXXX:file-YYYY" or a bare "file-YYYY" -- the
+    # same two forms `dx download` itself accepts.
+    project_id, _, file_id = str(project_file_id).rpartition(":")
+    dxpy.download_dxfile(file_id, str(out_path), project=project_id or None)
 
 
 def chr_prefix_bed(src_path, dest_path):
@@ -213,9 +175,9 @@ def run_normalisation_file_builder(
 
 def verify_output(out_path, skip=False):
     out_path = Path(out_path)
-    with out_path.open() as f:
-        lines = sum(1 for _ in f)
-    actual_md5 = hashlib.md5(out_path.read_bytes()).hexdigest()
+    content = out_path.read_bytes()
+    lines = content.count(b"\n") + (1 if content and not content.endswith(b"\n") else 0)
+    actual_md5 = hashlib.md5(content).hexdigest()
     if skip:
         print(f"Output checksum check skipped (--skip-checksum-assert): "
               f"{lines} lines, md5 {actual_md5}", file=sys.stderr)
