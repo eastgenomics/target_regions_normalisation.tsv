@@ -9,49 +9,6 @@ from unittest import mock
 import build_target_regions_normalisation as build_mod
 
 
-class TestChrPrefixBed(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.src = Path(self.tmp.name) / "nochr.bed"
-        self.dest = Path(self.tmp.name) / "chr.bed"
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def test_prefixes_every_line(self):
-        self.src.write_text("1\t100\t200\t.\n2\t300\t400\trs123\n")
-        build_mod.chr_prefix_bed(self.src, self.dest)
-        self.assertEqual(
-            self.dest.read_text(),
-            "chr1\t100\t200\t.\nchr2\t300\t400\trs123\n",
-        )
-
-    def test_preserves_line_count(self):
-        self.src.write_text("1\t1\t2\t.\nX\t1\t2\t.\nY\t1\t2\t.\n")
-        build_mod.chr_prefix_bed(self.src, self.dest)
-        self.assertEqual(
-            len(self.dest.read_text().splitlines()),
-            len(self.src.read_text().splitlines()),
-        )
-
-    def test_skips_blank_lines_without_prefixing_them(self):
-        self.src.write_text("1\t1\t2\t.\n\n2\t3\t4\t.\n")
-        build_mod.chr_prefix_bed(self.src, self.dest)
-        lines = self.dest.read_text().splitlines()
-        self.assertEqual(lines, ["chr1\t1\t2\t.", "", "chr2\t3\t4\t."])
-
-    def test_does_not_double_prefix_if_rerun_on_output(self):
-        # Guards against accidentally chr-prefixing an already chr-prefixed
-        # file (e.g. a caller passing the wrong source by mistake).
-        self.src.write_text("1\t1\t2\t.\n")
-        build_mod.chr_prefix_bed(self.src, self.dest)
-        second = Path(self.tmp.name) / "chr2.bed"
-        build_mod.chr_prefix_bed(self.dest, second)
-        self.assertEqual(second.read_text(), "chrchr1\t1\t2\t.\n")
-        # i.e. calling this twice is a caller error, not something the
-        # function silently protects against -- documented behaviour.
-
-
 class TestLoadCohortManifest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

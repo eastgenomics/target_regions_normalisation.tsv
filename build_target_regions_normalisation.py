@@ -24,9 +24,10 @@ Inputs (DNAnexus file IDs, immutable/content-addressed):
   --cobalt-jar-source     project-Fkb6Gkj433GVVvj73J7x8KbV:file-J893p9Q470j4zY3zzpVBjP11
                             (cobalt.jar, COBALT 3.0-beta.5 — the APPROVED,
                             documented production jar; see DECISIONS)
-  --backbone-bed-source   project-Fkb6Gkj433GVVvj73J7x8KbV:file-J88gVF84Y8X123K6JX8jB8Z5
-                            (backbone_padded_150bp_nochr.bed — no-chr; this
-                            script chr-prefixes it itself, see DECISIONS)
+  --backbone-bed-source   project-Fkb6Gkj433GVVvj73J7x8KbV:file-JBp3vx8433GQbP2bJY9J9X7V
+                            (backbone_padded_150bp.bed, chr-prefixed — padded
+                            directly from the chr-prefixed raw source, see
+                            DECISIONS)
   --gc-profile-source     file-J88xxvQ4QyVPb8K6VFqX1FKB
                             (GC_profile.1000bp.38.cnp, already chr-prefixed,
                             no swap needed)
@@ -54,7 +55,7 @@ from pathlib import Path
 import dxpy
 
 DEFAULT_COBALT_JAR_SOURCE = "project-Fkb6Gkj433GVVvj73J7x8KbV:file-J893p9Q470j4zY3zzpVBjP11"
-DEFAULT_BACKBONE_BED_SOURCE = "project-Fkb6Gkj433GVVvj73J7x8KbV:file-J88gVF84Y8X123K6JX8jB8Z5"
+DEFAULT_BACKBONE_BED_SOURCE = "project-Fkb6Gkj433GVVvj73J7x8KbV:file-JBp3vx8433GQbP2bJY9J9X7V"
 DEFAULT_GC_PROFILE_SOURCE = "file-J88xxvQ4QyVPb8K6VFqX1FKB"
 DEFAULT_REF_GENOME_VERSION = "38"
 
@@ -80,9 +81,11 @@ EXPECTED_OUTPUT_LINES = 74503
 # Decision 2 — Use -ref_genome_version 38, never 37 -- required by the
 # approved jar, and the BED's chr-prefix convention must match it anyway.
 
-# Decision 3 — chr-prefix the backbone BED ourselves rather than reuse a
-# separate no-chr GC profile -- GC-profile matching isn't chr-prefix
-# agnostic, and the no-chr GC profile is byte-identical to the live one.
+# Decision 3 — use a permanently-stored chr-prefixed BED
+# (backbone_padded_150bp.bed, padded directly from the chr-prefixed raw
+# source) rather than chr-prefixing a no-chr sibling at build time or
+# reusing a separate no-chr GC profile -- GC-profile matching isn't
+# chr-prefix agnostic, so target_regions_bed must match its convention.
 
 # Decision 4 — no Gender column in the sample manifest; gender is inferred
 # by NormalisationFileBuilder from real AMBER BAF data. A 41-sample A/B
@@ -103,20 +106,6 @@ def dx_download(project_file_id, out_path):
     # same two forms `dx download` itself accepts.
     project_id, _, file_id = str(project_file_id).rpartition(":")
     dxpy.download_dxfile(file_id, str(out_path), project=project_id or None)
-
-
-def chr_prefix_bed(src_path, dest_path):
-    """Prepend 'chr' to every line's chromosome column. This BED has no
-    header/comment lines, so a blind line-start substitution is safe and
-    unambiguous -- confirmed against the real file (57,295 lines in, 57,295
-    lines out, only column 1 changes)."""
-    src_path, dest_path = Path(src_path), Path(dest_path)
-    with src_path.open() as fin, dest_path.open("w") as fout:
-        for line in fin:
-            if line.strip():
-                fout.write("chr" + line)
-            else:
-                fout.write(line)
 
 
 def load_cohort_manifest(path):
@@ -150,20 +139,20 @@ def download_cohort_files(manifest, cobalt_dir, amber_dir):
 
 
 def run_normalisation_file_builder(
-    cobalt_jar, backbone_bed_chr, gc_profile, ref_genome_version,
+    cobalt_jar, backbone_bed, gc_profile, ref_genome_version,
     cobalt_dir, amber_dir, sample_ids_csv, out_path, workdir,
 ):
     # -output_file is the one argument that may legitimately point outside
     # workdir (a caller-supplied --out with a subdirectory) -- resolve it to
     # an absolute path rather than reducing it to a bare filename, or the
     # builder would silently write to the wrong place (see the test that
-    # covers this: test_out_path_with_subdirectory_is_preserved).
+    # covers this: test_output_file_arg_is_the_resolved_absolute_path_even_with_a_subdirectory).
     sh(
         [
             "java", "-cp", Path(cobalt_jar).name,
             "com.hartwig.hmftools.cobalt.norm.NormalisationFileBuilder",
             "-cobalt_dir", f"{Path(cobalt_dir).name}/",
-            "-target_regions_bed", Path(backbone_bed_chr).name,
+            "-target_regions_bed", Path(backbone_bed).name,
             "-gc_profile", Path(gc_profile).name,
             "-ref_genome_version", str(ref_genome_version),
             "-sample_id_file", Path(sample_ids_csv).name,
@@ -235,8 +224,7 @@ def main():
     manifest = load_cohort_manifest(args.cohort_manifest)
 
     cobalt_jar = workdir / "cobalt.jar"
-    backbone_bed_nochr = workdir / "backbone_padded_150bp_nochr.bed"
-    backbone_bed_chr = workdir / "backbone_padded_150bp_chr.bed"
+    backbone_bed = workdir / "backbone_padded_150bp.bed"
     gc_profile = workdir / "GC_profile.1000bp.38.cnp"
     cobalt_dir = workdir / "cobalt_bootstrap_all"
     amber_dir = workdir / "amber_flat"
@@ -246,19 +234,18 @@ def main():
 
     if not args.skip_download:
         dx_download(args.cobalt_jar_source, cobalt_jar)
-        dx_download(args.backbone_bed_source, backbone_bed_nochr)
+        dx_download(args.backbone_bed_source, backbone_bed)
         dx_download(args.gc_profile_source, gc_profile)
         download_cohort_files(manifest, cobalt_dir, amber_dir)
     else:
-        for p in (cobalt_jar, backbone_bed_nochr, gc_profile, cobalt_dir, amber_dir):
+        for p in (cobalt_jar, backbone_bed, gc_profile, cobalt_dir, amber_dir):
             if not p.exists():
                 sys.exit(f"--skip-download given but {p} is missing")
 
-    chr_prefix_bed(backbone_bed_nochr, backbone_bed_chr)
     build_sample_ids_csv(manifest, sample_ids_csv)
 
     run_normalisation_file_builder(
-        cobalt_jar, backbone_bed_chr, gc_profile, args.ref_genome_version,
+        cobalt_jar, backbone_bed, gc_profile, args.ref_genome_version,
         cobalt_dir, amber_dir, sample_ids_csv, out_path, workdir,
     )
 
