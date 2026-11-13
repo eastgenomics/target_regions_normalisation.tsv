@@ -1,13 +1,24 @@
 # target_regions_normalisation.tsv
 
-Reproducible build script for `target_regions_normalisation.tsv` — the COBALT
-panel-normalisation file used by `eggd_cgp-cobalt` to correct per-window
-read-depth ratios for CGP backbone target-region biases.
+Reproducible build script for `target_regions_normalisation_v1.1.0.tsv` — the
+COBALT panel-normalisation file used by `eggd_cgp-cobalt` to correct
+per-window read-depth ratios for CGP backbone target-region biases.
+
+## Versions
+
+| Version | Training cohort | Data | md5 |
+|---|---|---|---|
+| 1.1.0 (this release) | 124 CNVkit static PoN members (FFPE tumours) | non-UMI production BAMs | `8b9738de4e7de7c0e0b8c7dc01c8c417` |
+| 1.0.0 | 41 EF v1 samples (run 0734 Val1) | UMI-consensus BAMs | `ab8a12cf4fa129e7c227c6fdb3d0612f` |
+
+Both are 74,502 data rows over the same windows. v1.1.0 is built from the data
+production now uses (UMIs masked at demultiplexing, duplicates marked; DI-4114)
+and from the same sample type (FFPE). Jira: DI-4246.
 
 ## What this builds
 
-`target_regions_normalisation.tsv` is built once, from a fixed 41-sample
-training cohort ("EF v1"), by running Hartwig's own
+`target_regions_normalisation_v1.1.0.tsv` is built from a fixed 124-sample
+training cohort, by running Hartwig's own
 `com.hartwig.hmftools.cobalt.norm.NormalisationFileBuilder` (a class shipped
 inside `cobalt.jar`) — this is Hartwig's documented ["Panel resources
 training procedure"](https://github.com/hartwigmedical/hmftools/blob/master/pipeline/README_TARGETED.md),
@@ -24,7 +35,7 @@ The script:
 
 1. Downloads `cobalt.jar` (the approved production release, COBALT
    3.0-beta.5), the chr-prefixed backbone target-regions BED, and the GC
-   profile from DNAnexus, plus the 41-sample training cohort's COBALT ratio
+   profile from DNAnexus, plus the 124-sample training cohort's COBALT ratio
    and AMBER BAF files (file IDs frozen in `training_cohort_manifest.tsv`).
 2. Builds a `SampleId`-only sample list — no Gender column, so gender is
    inferred by `NormalisationFileBuilder` itself from real AMBER BAF data.
@@ -41,7 +52,7 @@ document:
 Every manual, judgement-based resolution from the investigation that
 produced this script, with the full rationale and evidence. The
 `DECISIONS` block in `build_target_regions_normalisation.py` records the
-same five items in short form, pointing back here.
+same six items in short form, pointing back here.
 
 ### Decision 1 — use the approved COBALT jar
 
@@ -108,25 +119,55 @@ QC) — so this change didn't require re-wiring PURPLE.
 
 ### Decision 4 — no Gender column in the sample manifest
 
-Gender for all 41 samples is inferred by `NormalisationFileBuilder` itself
+Gender for all 124 samples is inferred by `NormalisationFileBuilder` itself
 from real AMBER BAF chrX heterozygosity data
 (`com.hartwig.hmftools.common.amber.AmberGender`), using whichever
 pseudo-autosomal-region (PAR) boundary set matches `-ref_genome_version`.
 The historical build (V37 PAR boundaries against genuinely
 GRCh38-aligned AMBER BAF data) was a real, if theoretical, coordinate
-mismatch -- confirmed via a full 41-sample controlled A/B rerun to have
-changed ZERO gender calls and ZERO output values for this cohort (holding
+mismatch -- confirmed via a full 41-sample controlled A/B rerun (the v1.0.0 cohort) to have
+changed ZERO gender calls and ZERO output values for that cohort (holding
 the jar version constant). V38 is still the correct choice because it's
 genuinely consistent, not because the V37 mismatch caused visible harm
 here.
 
-### Decision 5 — the 41-sample cohort manifest is frozen
+### Decision 5 — the training cohort is the 124 FFPE CNVkit PoN members
 
-This cohort manifest (41 EF v1 samples) is frozen, versioned data, not
-re-derived. It matches the samples used for the currently-live production
-file, letting a rebuild be checked against that file directly. A
-different/larger training cohort is a deliberate, separate decision (new
-panel validation), not something this script infers on its own.
+The cohort is the 124 members of the CNVkit static PoN (DI-4093), under the
+same rules: FFPE tumours only (production is FFPE), one sequencing per
+specimen, median depth of at least 100x. It excludes the commercial
+controls, the fresh-frozen WGS truth tumours, their dilutions and the blood
+germline normals, so none of the PURPLE clinical-validation truth samples is
+in the training set. 124 samples is six times the 20 that Hartwig's training
+procedure recommends.
+
+The AMBER BAF files are the fgbio-clipped AMBER outputs (`eggd_cgp-amber`
+1.0.1 on `ClipBam --clip-overlapping-reads` BAMs), the production AMBER
+input. They are used only for sex inference (Decision 4). The AMBER sex
+call PURPLE reports for these samples is female for 91 and male for 33. One
+sample, 26127S0031, is male in the laboratory record but female by AMBER; it
+is 1 of 124 values in each window's median.
+
+The manifest is frozen, versioned data, not re-derived. Any change to the
+cohort is a new version of the file.
+
+### Decision 6 — production COBALT ratio files as training input
+
+The COBALT ratio files are the production outputs of `eggd_cgp-cobalt`
+1.0.2 (COBALT 3.0-beta.5) on the unclipped non-UMI BAMs. That run uses the
+normalisation file of the time, but `NormalisationFileBuilder` reads only
+two columns of each ratio file, `tumorReadDepth` and `tumorGCContent`
+(`cobalt.norm.DataLoader`, `Normaliser`); `tumorGCRatio`, the column the
+normalisation file changes, is not used. COBALT 3.0-beta.5 run without a
+normalisation file on the BAMs of two cohort members (one female, one male)
+gave a `tumorReadDepth` identical to the production file in all 3,088,257
+windows, and a `tumorGCContent` identical in all 74,502 rows the builder
+reads.
+
+The ratio and BAF files were extracted from the production `cobalt.tar.gz`
+and `amber.tar.gz` outputs, named by specimen, and stored in
+`project-J88p7V0470jPZ2Vv1VqB3BFz:/target_regions_normalisation_training/`
+(`cobalt/`, `amber/`).
 
 See the [Confluence controlled
 document](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4805623939)
@@ -136,8 +177,11 @@ and ruled out.
 ## Usage — recreating the file
 
 ```bash
-python3 build_target_regions_normalisation.py --out target_regions_normalisation.tsv
+python3 build_target_regions_normalisation.py
 ```
+
+The output defaults to `target_regions_normalisation_v1.1.0.tsv` in the work
+directory.
 
 Requires: `dxpy` (the DNAnexus Python API, authenticated via the same
 credentials as the `dx` CLI), `java` (a JRE — no Docker needed,
@@ -151,13 +195,14 @@ explicit `--workdir` to reuse a location (required for `--skip-download`,
 since there's nothing to reuse otherwise). Either way, this is the exact
 same command whether you're recreating the file for the first time or
 independently verifying reproducibility — there is no separate test mode.
-A real, fresh run downloads the jar, BED, GC profile, and all 82
+A real, fresh run downloads the jar, BED, GC profile, and all 248
 cohort-level files from scratch, runs the real `NormalisationFileBuilder`,
 and the script asserts the result against the pinned checksum
 (`EXPECTED_OUTPUT_MD5`/`EXPECTED_OUTPUT_LINES`), exiting non-zero on any
-mismatch — so a clean exit *is* the reproducibility proof. Confirmed this
-way across multiple independent from-scratch runs during development
-(~4.5 minutes each, dominated by downloading 82 cohort files).
+mismatch — so a clean exit *is* the reproducibility proof. v1.1.0 was
+confirmed this way by two independent from-scratch runs (about 12 minutes
+each: about 6 minutes downloading the 248 cohort files, about 6 minutes in
+`NormalisationFileBuilder`).
 
 ## Tests
 
@@ -176,5 +221,5 @@ exercised by the reproducibility runs instead, not mocked here.
 | File | Purpose |
 |---|---|
 | `build_target_regions_normalisation.py` | Main build script |
-| `training_cohort_manifest.tsv` | The frozen 41-sample EF v1 training cohort — SampleId, RatioFileId, AmberBafFileId |
+| `training_cohort_manifest.tsv` | The frozen 124-sample training cohort — SampleId, RatioFileId, AmberBafFileId |
 | `test_build_target_regions_normalisation.py` | Unit tests |
