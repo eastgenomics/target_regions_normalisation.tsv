@@ -42,9 +42,10 @@ The script:
 3. Runs `NormalisationFileBuilder` and asserts the result against a pinned
    checksum.
 
-Full narrative (why each decision was made, what was tried, the historical
-build's actual mechanism and its problems) is in the Confluence controlled
-document:
+The Confluence controlled documents record each version's provenance and
+testing:
+[target_regions_normalisation_v1.1.0.tsv](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4875714639)
+and, for v1.0.0 (including the investigation behind Decisions 1-4),
 [target_regions_normalisation.tsv](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4805623939).
 
 ## Decisions
@@ -169,8 +170,9 @@ and `amber.tar.gz` outputs, named by specimen, and stored in
 `project-J88p7V0470jPZ2Vv1VqB3BFz:/target_regions_normalisation_training/`
 (`cobalt/`, `amber/`).
 
-See the [Confluence controlled
-document](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4805623939)
+See the Confluence controlled documents for
+[v1.1.0](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4875714639)
+and [v1.0.0](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4805623939)
 for the fuller narrative behind each of these, including what was tried
 and ruled out.
 
