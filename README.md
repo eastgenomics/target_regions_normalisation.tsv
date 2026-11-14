@@ -4,11 +4,14 @@ Reproducible build script for `target_regions_normalisation_v1.1.0.tsv` — the
 COBALT panel-normalisation file used by `eggd_cgp-cobalt` to correct
 per-window read-depth ratios for CGP backbone target-region biases.
 
+A version is for production use once its Confluence controlled document is
+approved; check the document's status (links below) before using a file.
+
 ## Versions
 
 | Version | Training cohort | Data | md5 |
 |---|---|---|---|
-| 1.1.0 (this release) | 124 CNVkit static PoN members (FFPE tumours) | non-UMI production BAMs | `8b9738de4e7de7c0e0b8c7dc01c8c417` |
+| 1.1.0 (this release) | 123 CNVkit static PoN members (FFPE tumours) | non-UMI production BAMs | `1c5c976586199830c509ac5dc19d8491` |
 | 1.0.0 | 41 EF v1 samples (run 0734 Val1) | UMI-consensus BAMs | `ab8a12cf4fa129e7c227c6fdb3d0612f` |
 
 Both are 74,502 data rows over the same windows. v1.1.0 is built from the data
@@ -17,7 +20,7 @@ and from the same sample type (FFPE). Jira: DI-4246.
 
 ## What this builds
 
-`target_regions_normalisation_v1.1.0.tsv` is built from a fixed 124-sample
+`target_regions_normalisation_v1.1.0.tsv` is built from a fixed 123-sample
 training cohort, by running Hartwig's own
 `com.hartwig.hmftools.cobalt.norm.NormalisationFileBuilder` (a class shipped
 inside `cobalt.jar`) — this is Hartwig's documented ["Panel resources
@@ -35,7 +38,7 @@ The script:
 
 1. Downloads `cobalt.jar` (the approved production release, COBALT
    3.0-beta.5), the chr-prefixed backbone target-regions BED, and the GC
-   profile from DNAnexus, plus the 124-sample training cohort's COBALT ratio
+   profile from DNAnexus, plus the 123-sample training cohort's COBALT ratio
    and AMBER BAF files (file IDs frozen in `training_cohort_manifest.tsv`).
 2. Builds a `SampleId`-only sample list — no Gender column, so gender is
    inferred by `NormalisationFileBuilder` itself from real AMBER BAF data.
@@ -120,7 +123,7 @@ QC) — so this change didn't require re-wiring PURPLE.
 
 ### Decision 4 — no Gender column in the sample manifest
 
-Gender for all 124 samples is inferred by `NormalisationFileBuilder` itself
+Gender for all 123 samples is inferred by `NormalisationFileBuilder` itself
 from real AMBER BAF chrX heterozygosity data
 (`com.hartwig.hmftools.common.amber.AmberGender`), using whichever
 pseudo-autosomal-region (PAR) boundary set matches `-ref_genome_version`.
@@ -132,22 +135,32 @@ the jar version constant). V38 is still the correct choice because it's
 genuinely consistent, not because the V37 mismatch caused visible harm
 here.
 
-### Decision 5 — the training cohort is the 124 FFPE CNVkit PoN members
+### Decision 5 — the training cohort is 123 of the 124 FFPE CNVkit PoN members
 
-The cohort is the 124 members of the CNVkit static PoN (DI-4093), under the
+The cohort is the members of the CNVkit static PoN (DI-4093), under the
 same rules: FFPE tumours only (production is FFPE), one sequencing per
 specimen, median depth of at least 100x. It excludes the commercial
 controls, the fresh-frozen WGS truth tumours, their dilutions and the blood
 germline normals, so none of the PURPLE clinical-validation truth samples is
-in the training set. 124 samples is six times the 20 that Hartwig's training
+in the training set. 123 samples is six times the 20 that Hartwig's training
 procedure recommends.
+
+One PoN member is excluded: 26127S0031, probably 47,XXY. It carries a Y
+chromosome (laboratory record male; chrY reads at male level) and two X
+chromosomes (62 of 84 informative chrX sites heterozygous; female chrX
+dosage). `NormalisationFileBuilder` models sex chromosomes for two sexes
+only: it divides each sample's chrX ratio by 1 (female) or 0.5 (male) and
+leaves female samples out of chrY. Neither model fits this sample's sex
+chromosomes, so it is left out rather than entered under either sex. With it
+included the file differed by a median 0.0014 log2 on chrX (maximum 0.032)
+and not at all on chrY, the size of change that removing any one sample
+makes.
 
 The AMBER BAF files are the fgbio-clipped AMBER outputs (`eggd_cgp-amber`
 1.0.1 on `ClipBam --clip-overlapping-reads` BAMs), the production AMBER
 input. They are used only for sex inference (Decision 4). The AMBER sex
-call PURPLE reports for these samples is female for 91 and male for 33. One
-sample, 26127S0031, is male in the laboratory record but female by AMBER; it
-is 1 of 124 values in each window's median.
+call PURPLE reports for these samples is female for 90 and male for 33, in
+agreement with the laboratory record wherever it gives a sex.
 
 The manifest is frozen, versioned data, not re-derived. Any change to the
 cohort is a new version of the file.
@@ -156,10 +169,10 @@ cohort is a new version of the file.
 
 The COBALT ratio files are the production outputs of `eggd_cgp-cobalt`
 1.0.2 (COBALT 3.0-beta.5) on the unclipped non-UMI BAMs. That run uses the
-normalisation file of the time, but `NormalisationFileBuilder` reads only
-two columns of each ratio file, `tumorReadDepth` and `tumorGCContent`
-(`cobalt.norm.DataLoader`, `Normaliser`); `tumorGCRatio`, the column the
-normalisation file changes, is not used. COBALT 3.0-beta.5 run without a
+normalisation file of the time, but `NormalisationFileBuilder`'s
+calculation uses only two columns of each ratio file, `tumorReadDepth` and
+`tumorGCContent` (`cobalt.norm.DataLoader`, `Normaliser`); `tumorGCRatio`,
+the column the normalisation file changes, is read but not used. COBALT 3.0-beta.5 run without a
 normalisation file on the BAMs of two cohort members (one female, one male)
 gave a `tumorReadDepth` identical to the production file in all 3,088,257
 windows, and a `tumorGCContent` identical in all 74,502 rows the builder
@@ -223,5 +236,5 @@ exercised by the reproducibility runs instead, not mocked here.
 | File | Purpose |
 |---|---|
 | `build_target_regions_normalisation.py` | Main build script |
-| `training_cohort_manifest.tsv` | The frozen 124-sample training cohort — SampleId, RatioFileId, AmberBafFileId |
+| `training_cohort_manifest.tsv` | The frozen 123-sample training cohort — SampleId, RatioFileId, AmberBafFileId |
 | `test_build_target_regions_normalisation.py` | Unit tests |

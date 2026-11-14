@@ -5,8 +5,8 @@ build_target_regions_normalisation.py
 Builds target_regions_normalisation_v1.1.0.tsv — the COBALT
 panel-normalisation file used by eggd_cgp-cobalt to correct per-window
 read-depth ratios for CGP backbone target-region biases. Built from a fixed
-124-sample training cohort (the FFPE CNVkit static PoN members, non-UMI
-production data) via Hartwig's own NormalisationFileBuilder
+123-sample training cohort (the FFPE CNVkit static PoN members except one
+probable 47,XXY sample; non-UMI production data) via Hartwig's own NormalisationFileBuilder
 (com.hartwig.hmftools.cobalt.norm.NormalisationFileBuilder, ships inside
 cobalt.jar) — this is Hartwig's documented "Panel resources training
 procedure" (see pipeline/README_TARGETED.md in hartwigmedical/hmftools),
@@ -33,7 +33,7 @@ Inputs (DNAnexus file IDs, immutable/content-addressed):
                             (GC_profile.1000bp.38.cnp, already chr-prefixed,
                             no swap needed)
   --cohort-manifest       training_cohort_manifest.tsv (bundled with this
-                            script) — the frozen 124-sample cohort:
+                            script) — the frozen 123-sample cohort:
                             SampleId, RatioFileId, AmberBafFileId, all in
                             project-J88p7V0470jPZ2Vv1VqB3BFz
                             (/target_regions_normalisation_training/)
@@ -67,7 +67,7 @@ DEFAULT_OUT = f"target_regions_normalisation_v{VERSION}.tsv"
 # Cohort project — all ratio/AMBER-BAF files in the bundled manifest live here.
 COHORT_PROJECT = "project-J88p7V0470jPZ2Vv1VqB3BFz"
 
-EXPECTED_OUTPUT_MD5 = "8b9738de4e7de7c0e0b8c7dc01c8c417"  # v1.1.0, pinned 2026-11-13,
+EXPECTED_OUTPUT_MD5 = "1c5c976586199830c509ac5dc19d8491"  # v1.1.0, pinned 2026-11-14,
 # confirmed reproducible via two independent from-scratch runs of this script.
 # 74,502 data rows + 1 header = 74,503 lines.
 EXPECTED_OUTPUT_LINES = 74503
@@ -98,13 +98,14 @@ EXPECTED_OUTPUT_LINES = 74503
 
 # Decision 5 — the training cohort is the 124 CNVkit static PoN members
 # (DI-4093): FFPE tumours, one sequencing per specimen, median depth >= 100x,
-# non-UMI production data. The manifest is frozen, versioned data, not
+# non-UMI production data; less 26127S0031 (probable 47,XXY, whose X and Y
+# copy numbers fit neither sex's model): 123 samples. The manifest is frozen, versioned data, not
 # re-derived on the fly.
 
 # Decision 6 — the COBALT ratio files are the production eggd_cgp-cobalt
-# 1.0.2 outputs. NormalisationFileBuilder reads only tumorReadDepth and
-# tumorGCContent, which do not depend on the normalisation file the
-# production run used.
+# 1.0.2 outputs. NormalisationFileBuilder's calculation uses only
+# tumorReadDepth and tumorGCContent, which do not depend on the
+# normalisation file the production run used.
 
 
 def sh(cmd, **kw):
@@ -207,7 +208,7 @@ def main():
     ap.add_argument(
         "--cohort-manifest",
         default=str(Path(__file__).parent / "training_cohort_manifest.tsv"),
-        help="Frozen 124-sample training cohort manifest, see Decision 5",
+        help="Frozen 123-sample training cohort manifest, see Decision 5",
     )
     ap.add_argument("--workdir", default=None,
                      help="Defaults to a fresh, private temp dir (tempfile.mkdtemp) -- "
