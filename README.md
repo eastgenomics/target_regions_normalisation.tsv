@@ -4,8 +4,12 @@ Reproducible build script for `target_regions_normalisation_v1.1.0.tsv` — the
 COBALT panel-normalisation file used by `eggd_cgp-cobalt` to correct
 per-window read-depth ratios for CGP backbone target-region biases.
 
-A version is for production use once its Confluence controlled document is
-approved; check the document's status (links below) before using a file.
+**Status:** the v1.1.0 controlled document
+([DV 4875714639](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4875714639))
+is DRAFT. v1.0.0
+([DV 4805623939](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4805623939))
+remains the approved version until v1.1.0 is approved. A version is for
+production use only once its controlled document is approved.
 
 ## Versions
 
@@ -151,10 +155,11 @@ chromosomes (62 of 84 informative chrX sites heterozygous; female chrX
 dosage). `NormalisationFileBuilder` models sex chromosomes for two sexes
 only: it divides each sample's chrX ratio by 1 (female) or 0.5 (male) and
 leaves female samples out of chrY. Neither model fits this sample's sex
-chromosomes, so it is left out rather than entered under either sex. With it
-included the file differed by a median 0.0014 log2 on chrX (maximum 0.032)
-and not at all on chrY, the size of change that removing any one sample
-makes.
+chromosomes, so it is left out rather than entered under either sex. The
+file built with it included differs from this one by a median 0.0014 log2 on
+chrX (maximum 0.032; no row switches between masked and unmasked), not at all
+on chrY, and by a median 0.0013 log2 on the autosomes, where 21 of 70,020
+rows switch between masked and unmasked.
 
 The AMBER BAF files are the fgbio-clipped AMBER outputs (`eggd_cgp-amber`
 1.0.1 on `ClipBam --clip-overlapping-reads` BAMs), the production AMBER
@@ -210,13 +215,13 @@ explicit `--workdir` to reuse a location (required for `--skip-download`,
 since there's nothing to reuse otherwise). Either way, this is the exact
 same command whether you're recreating the file for the first time or
 independently verifying reproducibility — there is no separate test mode.
-A real, fresh run downloads the jar, BED, GC profile, and all 248
+A real, fresh run downloads the jar, BED, GC profile, and all 246
 cohort-level files from scratch, runs the real `NormalisationFileBuilder`,
 and the script asserts the result against the pinned checksum
 (`EXPECTED_OUTPUT_MD5`/`EXPECTED_OUTPUT_LINES`), exiting non-zero on any
 mismatch — so a clean exit *is* the reproducibility proof. v1.1.0 was
 confirmed this way by two independent from-scratch runs (about 12 minutes
-each: about 6 minutes downloading the 248 cohort files, about 6 minutes in
+each: about 6 minutes downloading the 246 cohort files, about 6 minutes in
 `NormalisationFileBuilder`).
 
 ## Tests

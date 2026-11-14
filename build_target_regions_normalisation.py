@@ -2,8 +2,9 @@
 """
 build_target_regions_normalisation.py
 
-Builds target_regions_normalisation_v1.1.0.tsv — the COBALT
-panel-normalisation file used by eggd_cgp-cobalt to correct per-window
+Builds target_regions_normalisation_v1.1.0.tsv — a COBALT
+panel-normalisation file for eggd_cgp-cobalt (for production use once its
+controlled document, DV 4875714639, is approved) to correct per-window
 read-depth ratios for CGP backbone target-region biases. Built from a fixed
 123-sample training cohort (the FFPE CNVkit static PoN members except one
 probable 47,XXY sample; non-UMI production data) via Hartwig's own NormalisationFileBuilder
