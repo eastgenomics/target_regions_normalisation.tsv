@@ -33,10 +33,12 @@ class TestLoadCohortManifest(unittest.TestCase):
         rows = build_mod.load_cohort_manifest(self.path)
         self.assertEqual(rows, [])
 
-    def test_real_bundled_manifest_has_41_rows_and_no_duplicates(self):
+    def test_real_bundled_manifest_has_123_rows_and_no_duplicates(self):
         real_manifest = Path(__file__).parent / "training_cohort_manifest.tsv"
         rows = build_mod.load_cohort_manifest(real_manifest)
-        self.assertEqual(len(rows), 41)
+        self.assertEqual(len(rows), 123)
+        # Decision 5: 26127S0031 (probable 47,XXY) is excluded from the cohort
+        self.assertNotIn("26127S0031", [r["SampleId"] for r in rows])
         sample_ids = [r["SampleId"] for r in rows]
         self.assertEqual(len(sample_ids), len(set(sample_ids)))
         for row in rows:
