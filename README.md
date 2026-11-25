@@ -5,11 +5,10 @@ COBALT panel-normalisation file used by `eggd_cgp-cobalt` to correct
 per-window read-depth ratios for CGP backbone target-region biases.
 
 **Status:** the v1.1.0 controlled document
-([DV 4875714639](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4875714639))
-is DRAFT. v1.0.0
+v1.1.0 ([DV 4875714639](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4875714639))
+is now the approved version for use in production, and can be found at the following location (001_Reference:/bed_files/b38/atlas_cnv/target_regions_normalisation_v1.1.0.tsv), with file id (file-JFv3QYj433GkYzp9zfGKkGpY). v1.0.0
 ([DV 4805623939](https://cuhbioinformatics.atlassian.net/wiki/spaces/DV/pages/4805623939))
-remains the approved version until v1.1.0 is approved. A version is for
-production use only once its controlled document is approved.
+has been removed from the 001_Reference folder.
 
 ## Versions
 
